@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/sha256"
+	//"crypto/sha256"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,11 +13,24 @@ type Block struct {
 	Data          []byte
 	PrevBlockHash []byte
 	Hash          []byte
+	Nonce         int
 }
 
 func NewBlock(data string, prevBlockHash []byte) *Block {
-	block := &Block{time.Now().Unix(), []byte(data), prevBlockHash, []byte{}}
-	block.SetHash()
+	block := &Block{
+		Timestamp:     time.Now().Unix(),
+		Data:          []byte(data),
+		PrevBlockHash: prevBlockHash,
+		Hash:          []byte{},
+		Nonce:         0,
+	}
+
+	pow := NewProofOfWork(block)
+	nonce, hash := pow.Run()
+
+	block.Hash = hash[:]
+	block.Nonce = nonce
+
 	return block
 }
 
@@ -25,6 +38,7 @@ func NewGenesisBlock(msg string) *Block {
 	return NewBlock(fmt.Sprintf("Genesis Block: %s", msg), []byte{})
 }
 
+/*
 func (b *Block) SetHash() {
 	timestamp := []byte(strconv.FormatInt(b.Timestamp, 10))
 	headers := bytes.Join([][]byte{b.PrevBlockHash, b.Data, timestamp}, []byte{})
@@ -32,6 +46,7 @@ func (b *Block) SetHash() {
 
 	b.Hash = hash[:]
 }
+*/
 
 func (b Block) String() string {
 	buf := &bytes.Buffer{}
@@ -63,5 +78,10 @@ func main() {
 
 	for _, block := range bc.blocks {
 		fmt.Println(block)
+
+		pow := NewProofOfWork(block)
+		fmt.Printf("PoW: %s\n", strconv.FormatBool(pow.Validate()))
+
+		fmt.Println()
 	}
 }
