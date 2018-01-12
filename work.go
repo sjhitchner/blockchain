@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"math/big"
+	"sync"
 )
 
 // IntToHex converts an int64 to a byte array
@@ -67,7 +68,7 @@ func (pow *ProofOfWork) Run() (int, []byte) {
 	for nonce < maxNonce {
 		data := pow.prepareData(nonce)
 		hash = sha256.Sum256(data)
-		fmt.Printf("\r%x", hash)
+		//fmt.Printf("\r%x", hash)
 		hashInt.SetBytes(hash[:])
 
 		if hashInt.Cmp(pow.target) == -1 {
@@ -92,4 +93,72 @@ func (pow *ProofOfWork) Validate() bool {
 	isValid := hashInt.Cmp(pow.target) == -1
 
 	return isValid
+}
+
+func (pow *ProofOfWork) RunParallel(num int) (int, []byte) {
+
+	nonceChan := make(chan int, num)
+	resultChan := make(chan int)
+	doneChan := make(chan struct{})
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < num; i++ {
+		go pow.runWorker(wg, nonceChan, resultChan)
+	}
+
+	go pow.seedNonces(wg, nonceChan, doneChan)
+
+	nonce := <-resultChan
+	doneChan <- struct{}{}
+
+	data := pow.prepareData(nonce)
+	hash := sha256.Sum256(data)
+
+	wg.Wait()
+	return nonce, hash[:]
+}
+
+func (pow *ProofOfWork) seedNonces(wg sync.WaitGroup, nonceChan chan<- int, done <-chan struct{}) {
+	wg.Add(1)
+	defer wg.Done()
+
+	nonce := 0
+	for nonce < maxNonce {
+		select {
+		case <-done:
+			goto DONE
+		default:
+			nonceChan <- nonce
+			nonce++
+		}
+
+		if nonce%10000 == 0 {
+			fmt.Printf("\r%x", nonce)
+		}
+	}
+	fmt.Println()
+
+DONE:
+	close(nonceChan)
+	return
+}
+
+func (pow *ProofOfWork) runWorker(wg sync.WaitGroup, nonceChan <-chan int, resultChan chan<- int) {
+	wg.Add(1)
+	defer wg.Done()
+
+	var hashInt big.Int
+	var hash [32]byte
+
+	for nonce := range nonceChan {
+		data := pow.prepareData(nonce)
+		hash = sha256.Sum256(data)
+		//fmt.Printf("\r%x", hash)
+		hashInt.SetBytes(hash[:])
+
+		if hashInt.Cmp(pow.target) == -1 {
+			resultChan <- nonce
+			return
+		}
+	}
 }

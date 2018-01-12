@@ -27,6 +27,7 @@ func NewBlock(data string, prevBlockHash []byte) *Block {
 
 	pow := NewProofOfWork(block)
 	nonce, hash := pow.Run()
+	//nonce, hash := pow.RunParallel(10)
 
 	block.Hash = hash[:]
 	block.Nonce = nonce
@@ -53,7 +54,17 @@ func (b Block) String() string {
 	fmt.Fprintf(buf, "Prev. hash: %x\n", b.PrevBlockHash)
 	fmt.Fprintf(buf, "Data: %s\n", b.Data)
 	fmt.Fprintf(buf, "Hash: %x\n", b.Hash)
+	fmt.Fprintf(buf, "Nonce: %x\n", b.Nonce)
 	return buf.String()
+}
+
+func (b *Block) Serialize() []byte {
+	var result bytes.Buffer
+	encoder := gob.NewEncoder(&result)
+
+	err := encoder.Encode(b)
+
+	return result.Bytes()
 }
 
 type Blockchain struct {
@@ -71,6 +82,8 @@ func (bc *Blockchain) AddBlock(data string) {
 }
 
 func main() {
+	start := time.Now()
+
 	bc := NewBlockchain("One must still have chaos in oneself to be able to give birth to a dancing star.")
 
 	bc.AddBlock("Send 1 BTC to Ivan")
@@ -84,4 +97,5 @@ func main() {
 
 		fmt.Println()
 	}
+	fmt.Println("Elapsed Time: ", time.Now().Sub(start))
 }
